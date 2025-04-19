@@ -9,6 +9,7 @@ let history = [];
 let historyPos = -1;
 let quizMode = false;
 
+// LocalStorage helpers
 function loadMemorized() {
   return JSON.parse(localStorage.getItem(memorizedKey) || '[]');
 }
@@ -22,6 +23,7 @@ function saveStats() {
   localStorage.setItem(statsKey, JSON.stringify(stats));
 }
 
+// Compute which cards remain
 function computeLearningSet() {
   const memorized = new Set(loadMemorized());
   learningSet = flashcards
@@ -29,6 +31,7 @@ function computeLearningSet() {
     .filter(i => !memorized.has(i));
 }
 
+// Weighted random for practice
 function weightedRandomIndex() {
   const weights = learningSet.map(i => {
     const s = stats[i] || {correct:0, total:0};
@@ -43,6 +46,7 @@ function weightedRandomIndex() {
   return learningSet[learningSet.length-1];
 }
 
+// Show overlay check/cross
 function showOverlay(symbol, color, callback) {
   const overlayId = quizMode ? 'quiz-overlay' : 'overlay';
   const overlay = document.getElementById(overlayId);
@@ -57,7 +61,7 @@ function showOverlay(symbol, color, callback) {
 
 // Flashcard Mode
 function updateCard() {
-  const wordEl     = document.getElementById("word");
+  const wordEl = document.getElementById("word");
   const progressEl = document.getElementById("progress");
   if (!learningSet.length) {
     wordEl.textContent = "🎉 All memorized!";
@@ -68,13 +72,11 @@ function updateCard() {
   wordEl.textContent = showingEnglish ? card.English : card.Tagalog;
   progressEl.textContent = `${learningSet.indexOf(currentIndex)+1} / ${learningSet.length}`;
 }
-
 function toggleCard() {
   if (!learningSet.length) return;
   showingEnglish = !showingEnglish;
   updateCard();
 }
-
 function nextFlashcard() {
   if (!learningSet.length) return;
   currentIndex = weightedRandomIndex();
@@ -83,7 +85,6 @@ function nextFlashcard() {
   historyPos = history.length - 1;
   updateCard();
 }
-
 function prevFlashcard() {
   if (historyPos > 0) {
     historyPos--;
@@ -92,7 +93,6 @@ function prevFlashcard() {
     updateCard();
   }
 }
-
 function memorizeCurrent() {
   const mem = loadMemorized();
   if (!mem.includes(currentIndex)) {
@@ -128,7 +128,6 @@ function showQuiz() {
     optsEl.appendChild(btn);
   });
 }
-
 function handleAnswer(qIndex, chosen) {
   const correct = flashcards[qIndex].English;
   stats[qIndex] = stats[qIndex] || {correct:0, total:0};
@@ -142,55 +141,84 @@ function handleAnswer(qIndex, chosen) {
   saveStats();
 }
 
+// Score View
+function showScore() {
+  document.getElementById('flashcard-container').style.display='none';
+  document.getElementById('quiz-container').style.display='none';
+  document.getElementById('score-container').style.display='block';
+  renderScore();
+}
+function renderScore() {
+  const memIndices = loadMemorized();
+  let totalCorrect = 0, totalAttempts = 0;
+  memIndices.forEach(i => {
+    const s = stats[i] || {correct:0, total:0};
+    totalCorrect += s.correct;
+    totalAttempts += s.total;
+  });
+  const overall = totalAttempts
+    ? Math.round((totalCorrect/totalAttempts)*100)
+    : 0;
+  document.getElementById('overall-score').textContent =
+    `Overall: ${overall}% (${totalCorrect}/${totalAttempts})`;
+
+  const ul = document.getElementById('memorized-list');
+  ul.innerHTML = '';
+  memIndices.forEach(i => {
+    const card = flashcards[i];
+    const s = stats[i] || {correct:0, total:0};
+    const pct = s.total ? Math.round((s.correct/s.total)*100) : 0;
+    const li = document.createElement('li');
+    li.textContent = `${card.Tagalog} – ${card.English}: ${pct}% (${s.correct}/${s.total})`;
+    ul.appendChild(li);
+  });
+}
+
 // Mode Switching
 function switchToFlashcard() {
   quizMode = false;
-  document.getElementById("quiz-container").style.display = 'none';
-  document.getElementById("flashcard-container").style.display = 'block';
+  document.getElementById('score-container').style.display='none';
+  document.getElementById('quiz-container').style.display='none';
+  document.getElementById('flashcard-container').style.display='block';
 }
-
 function switchToQuiz() {
   quizMode = true;
-  document.getElementById("flashcard-container").style.display = 'none';
-  document.getElementById("quiz-container").style.display = 'block';
+  document.getElementById('score-container').style.display='none';
+  document.getElementById('flashcard-container').style.display='none';
+  document.getElementById('quiz-container').style.display='block';
   showQuiz();
 }
 
 // CSV Load & Init
 function parseCSV(text) {
-  return text.trim()
-    .split('\n')
-    .slice(1)
-    .map(line => {
-      const [t, e] = line.split(',').map(v => v.trim());
-      return { Tagalog: t, English: e };
-    });
+  return text.trim().split('\n').slice(1).map(line=>{
+    const [t,e] = line.split(',').map(v=>v.trim());
+    return {Tagalog:t,English:e};
+  });
 }
-
 fetch('./flashcards.csv')
-  .then(r => r.text())
-  .then(txt => {
+  .then(r=>r.text())
+  .then(txt=>{
     flashcards = parseCSV(txt);
     stats      = loadStats();
     computeLearningSet();
     nextFlashcard();
   })
-  .catch(err => {
-    console.error("Could not load CSV:", err);
-    document.getElementById("word").textContent = "Error loading flashcards.";
-  });
+  .catch(err=>console.error("Load CSV error:",err));
 
-// Register Service Worker (if available)
+// Register SW
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('service-worker.js')
     .catch(console.error);
 }
 
-// Wire up buttons after DOM loads
+// Wire up buttons
 window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('nextBtn').addEventListener('click', nextFlashcard);
   document.getElementById('prevBtn').addEventListener('click', prevFlashcard);
   document.getElementById('memorizedBtn').addEventListener('click', memorizeCurrent);
   document.getElementById('flashcardModeBtn').addEventListener('click', switchToFlashcard);
   document.getElementById('quizModeBtn').addEventListener('click', switchToQuiz);
+  document.getElementById('scoreModeBtn').addEventListener('click', showScore);
+  document.getElementById('backBtn').addEventListener('click', switchToFlashcard);
 });
