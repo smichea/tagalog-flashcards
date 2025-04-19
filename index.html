@@ -1,6 +1,5 @@
-/* index.html */
-
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -13,7 +12,10 @@
   <div class="mode-switch">
     <button id="flashcardModeBtn">Flashcards</button>
     <button id="quizModeBtn">Quiz</button>
-  </div>  <!-- Flashcard View -->  <div id="flashcard-container">
+  </div>
+
+  <!-- Flashcard View -->
+  <div id="flashcard-container">
     <div class="card" id="card" onclick="toggleCard()">
       <div id="word">Loading…</div>
       <div id="overlay" class="overlay"></div>
@@ -24,8 +26,17 @@
       <button id="memorizedBtn">Memorized</button>
       <button id="nextBtn">Next</button>
     </div>
-  </div>  <!-- Quiz View -->  <div id="quiz-container" style="display:none;">
-    <div class="card" id="quiz-word"></div>
+  </div>
+
+  <!-- Quiz View -->
+  <div id="quiz-container" style="display:none;">
+    <div class="card" id="quiz-card">
+      <div id="quiz-word">Loading…</div>
+      <div id="quiz-overlay" class="overlay"></div>
+    </div>
     <div class="options"></div>
-  </div>  <script src="script.js"></script></body>
+  </div>
+
+  <script src="script.js"></script>
+</body>
 </html>
