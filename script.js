@@ -1,5 +1,3 @@
-// script.js
-
 let flashcards = [];
 let currentIndex = 0;
 let showingEnglish = false;
@@ -14,15 +12,12 @@ let quizMode = false;
 function loadMemorized() {
   return JSON.parse(localStorage.getItem(memorizedKey) || '[]');
 }
-
 function saveMemorized(list) {
   localStorage.setItem(memorizedKey, JSON.stringify(list));
 }
-
 function loadStats() {
   return JSON.parse(localStorage.getItem(statsKey) || '{}');
 }
-
 function saveStats() {
   localStorage.setItem(statsKey, JSON.stringify(stats));
 }
@@ -35,7 +30,6 @@ function computeLearningSet() {
 }
 
 function weightedRandomIndex() {
-  // weight = 1 - (correct/total)
   const weights = learningSet.map(i => {
     const s = stats[i] || {correct:0, total:0};
     return s.total > 0 ? 1 - (s.correct / s.total) : 1;
@@ -49,8 +43,18 @@ function weightedRandomIndex() {
   return learningSet[learningSet.length-1];
 }
 
-// ——— Flashcard Mode —————————————————————————
+function showOverlay(symbol, color, callback) {
+  const overlay = document.getElementById('overlay');
+  overlay.textContent = symbol;
+  overlay.style.color = color;
+  overlay.style.opacity = '1';
+  setTimeout(() => {
+    overlay.style.opacity = '0';
+    if (callback) callback();
+  }, 1000);
+}
 
+// — Flashcard Mode —
 function updateCard() {
   const wordEl     = document.getElementById("word");
   const progressEl = document.getElementById("progress");
@@ -65,13 +69,13 @@ function updateCard() {
 }
 
 function toggleCard() {
-  if (learningSet.length===0) return;
+  if (!learningSet.length) return;
   showingEnglish = !showingEnglish;
   updateCard();
 }
 
 function nextFlashcard() {
-  if (learningSet.length===0) return;
+  if (!learningSet.length) return;
   currentIndex = weightedRandomIndex();
   showingEnglish = false;
   history.push(currentIndex);
@@ -98,17 +102,15 @@ function memorizeCurrent() {
   nextFlashcard();
 }
 
-// ——— Quiz Mode —————————————————————————————————
-
+// — Quiz Mode —
 function showQuiz() {
-  if (learningSet.length === 0) {
+  if (!learningSet.length) {
     document.getElementById("quiz-word").textContent = "🎉 All memorized!";
     return;
   }
   const qIndex = learningSet[Math.floor(Math.random() * learningSet.length)];
   const card = flashcards[qIndex];
   const options = [card.English];
-  // pick 3 random distractors
   while (options.length < 4) {
     const rnd = flashcards[Math.floor(Math.random() * flashcards.length)].English;
     if (!options.includes(rnd)) options.push(rnd);
@@ -132,13 +134,14 @@ function handleAnswer(qIndex, chosen) {
   stats[qIndex].total++;
   if (chosen === correct) {
     stats[qIndex].correct++;
+    showOverlay('✔', 'lightgreen', showQuiz);
+  } else {
+    showOverlay('✖', 'tomato', showQuiz);
   }
   saveStats();
-  showQuiz();
 }
 
-// ——— Mode Switching ——————————————————————————
-
+// — Mode Switching —
 function switchToFlashcard() {
   quizMode = false;
   document.getElementById("quiz-container").style.display = 'none';
@@ -152,17 +155,13 @@ function switchToQuiz() {
   showQuiz();
 }
 
-// ——— CSV Loading & Init ————————————————————————
-
+// — CSV Load & Init —
 function parseCSV(text) {
   const lines  = text.trim().split('\n');
   const heads  = lines[0].split(',').map(h=>h.trim());
   return lines.slice(1).map(line => {
     const vals = line.split(',').map(v=>v.trim());
-    return { 
-      [heads[0]]: vals[0],
-      [heads[1]]: vals[1]
-    };
+    return { Tagalog: vals[0], English: vals[1] };
   });
 }
 
@@ -172,7 +171,6 @@ fetch('./flashcards.csv')
     flashcards = parseCSV(txt);
     stats      = loadStats();
     computeLearningSet();
-    // initial flashcard
     nextFlashcard();
   })
   .catch(err => {
@@ -180,21 +178,16 @@ fetch('./flashcards.csv')
     document.getElementById("word").textContent = "Error loading flashcards.";
   });
 
-// register SW for offline (if you have one)
+// register SW for offline (if available)
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js')
-    .catch(console.error);
+  navigator.serviceWorker.register('service-worker.js').catch(console.error);
 }
 
-// wire up buttons
-document.getElementById('nextBtn').addEventListener('click', () => {
-  if (!quizMode) nextFlashcard();
+// wire buttons
+window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('nextBtn').addEventListener('click', nextFlashcard);
+  document.getElementById('prevBtn').addEventListener('click', prevFlashcard);
+  document.getElementById('memorizedBtn').addEventListener('click', memorizeCurrent);
+  document.getElementById('flashcardModeBtn').addEventListener('click', switchToFlashcard);
+  document.getElementById('quizModeBtn').addEventListener('click', switchToQuiz);
 });
-document.getElementById('prevBtn').addEventListener('click', () => {
-  if (!quizMode) prevFlashcard();
-});
-document.getElementById('memorizedBtn').addEventListener('click', () => {
-  if (!quizMode) memorizeCurrent();
-});
-document.getElementById('flashcardModeBtn').addEventListener('click', switchToFlashcard);
-document.getElementById('quizModeBtn').addEventListener('click', switchToQuiz);
