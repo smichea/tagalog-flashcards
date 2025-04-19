@@ -48,7 +48,7 @@ function parseCSV(text) {
 }
 
 // Fetch and load the CSV as soon as available
-fetch('flashcards.csv')
+fetch('./flashcards.csv')
   .then(response => response.text())
   .then(data => {
     flashcards = parseCSV(data);
