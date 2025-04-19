@@ -1,3 +1,4 @@
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,14 +9,31 @@
   <title>Tagalog Flashcards</title>
 </head>
 <body>
-  <div class="card" onclick="toggleCard()">
-    <div id="word">Maganda</div>
-    <small id="progress">1/2</small>
+  <!-- Flashcard View -->
+  <div id="flashcard-container">
+    <div class="card" id="card" onclick="toggleCard()">
+      <div id="word">Loading…</div>
+    </div>
+    <small id="progress"></small>
+    <div class="controls">
+      <button id="prevBtn">Previous</button>
+      <button id="memorizedBtn">Memorized</button>
+      <button id="nextBtn">Next</button>
+    </div>
   </div>
-  <div class="buttons">
-    <button onclick="prevCard()">Previous</button>
-    <button onclick="nextCard()">Next</button>
+
+  <!-- Quiz View -->
+  <div id="quiz-container" style="display:none;">
+    <div class="card" id="quiz-word"></div>
+    <div class="options"></div>
   </div>
+
+  <!-- Mode Switch -->
+  <div class="mode-switch">
+    <button id="flashcardModeBtn">Flashcards</button>
+    <button id="quizModeBtn">Quiz</button>
+  </div>
+
   <script src="script.js"></script>
 </body>
 </html>
