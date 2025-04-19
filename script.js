@@ -44,7 +44,8 @@ function weightedRandomIndex() {
 }
 
 function showOverlay(symbol, color, callback) {
-  const overlay = document.getElementById('overlay');
+  const overlayId = quizMode ? 'quiz-overlay' : 'overlay';
+  const overlay = document.getElementById(overlayId);
   overlay.textContent = symbol;
   overlay.style.color = color;
   overlay.style.opacity = '1';
@@ -54,11 +55,11 @@ function showOverlay(symbol, color, callback) {
   }, 1000);
 }
 
-// — Flashcard Mode —
+// Flashcard Mode
 function updateCard() {
   const wordEl     = document.getElementById("word");
   const progressEl = document.getElementById("progress");
-  if (learningSet.length === 0) {
+  if (!learningSet.length) {
     wordEl.textContent = "🎉 All memorized!";
     progressEl.textContent = "";
     return;
@@ -79,7 +80,7 @@ function nextFlashcard() {
   currentIndex = weightedRandomIndex();
   showingEnglish = false;
   history.push(currentIndex);
-  historyPos = history.length -1;
+  historyPos = history.length - 1;
   updateCard();
 }
 
@@ -102,7 +103,7 @@ function memorizeCurrent() {
   nextFlashcard();
 }
 
-// — Quiz Mode —
+// Quiz Mode
 function showQuiz() {
   if (!learningSet.length) {
     document.getElementById("quiz-word").textContent = "🎉 All memorized!";
@@ -141,7 +142,7 @@ function handleAnswer(qIndex, chosen) {
   saveStats();
 }
 
-// — Mode Switching —
+// Mode Switching
 function switchToFlashcard() {
   quizMode = false;
   document.getElementById("quiz-container").style.display = 'none';
@@ -155,14 +156,15 @@ function switchToQuiz() {
   showQuiz();
 }
 
-// — CSV Load & Init —
+// CSV Load & Init
 function parseCSV(text) {
-  const lines  = text.trim().split('\n');
-  const heads  = lines[0].split(',').map(h=>h.trim());
-  return lines.slice(1).map(line => {
-    const vals = line.split(',').map(v=>v.trim());
-    return { Tagalog: vals[0], English: vals[1] };
-  });
+  return text.trim()
+    .split('\n')
+    .slice(1)
+    .map(line => {
+      const [t, e] = line.split(',').map(v => v.trim());
+      return { Tagalog: t, English: e };
+    });
 }
 
 fetch('./flashcards.csv')
@@ -178,12 +180,13 @@ fetch('./flashcards.csv')
     document.getElementById("word").textContent = "Error loading flashcards.";
   });
 
-// register SW for offline (if available)
+// Register Service Worker (if available)
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js').catch(console.error);
+  navigator.serviceWorker.register('service-worker.js')
+    .catch(console.error);
 }
 
-// wire buttons
+// Wire up buttons after DOM loads
 window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('nextBtn').addEventListener('click', nextFlashcard);
   document.getElementById('prevBtn').addEventListener('click', prevFlashcard);
