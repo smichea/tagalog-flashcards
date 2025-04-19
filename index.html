@@ -1,6 +1,6 @@
-<!-- index.html -->
-<!DOCTYPE html>
-<html lang="en">
+/* index.html */
+
+<!DOCTYPE html><html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -9,10 +9,14 @@
   <title>Tagalog Flashcards</title>
 </head>
 <body>
-  <!-- Flashcard View -->
-  <div id="flashcard-container">
+  <!-- Mode Switch Above Cards -->
+  <div class="mode-switch">
+    <button id="flashcardModeBtn">Flashcards</button>
+    <button id="quizModeBtn">Quiz</button>
+  </div>  <!-- Flashcard View -->  <div id="flashcard-container">
     <div class="card" id="card" onclick="toggleCard()">
       <div id="word">Loading…</div>
+      <div id="overlay" class="overlay"></div>
     </div>
     <small id="progress"></small>
     <div class="controls">
@@ -20,20 +24,8 @@
       <button id="memorizedBtn">Memorized</button>
       <button id="nextBtn">Next</button>
     </div>
-  </div>
-
-  <!-- Quiz View -->
-  <div id="quiz-container" style="display:none;">
+  </div>  <!-- Quiz View -->  <div id="quiz-container" style="display:none;">
     <div class="card" id="quiz-word"></div>
     <div class="options"></div>
-  </div>
-
-  <!-- Mode Switch -->
-  <div class="mode-switch">
-    <button id="flashcardModeBtn">Flashcards</button>
-    <button id="quizModeBtn">Quiz</button>
-  </div>
-
-  <script src="script.js"></script>
-</body>
+  </div>  <script src="script.js"></script></body>
 </html>
