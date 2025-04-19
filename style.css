@@ -1,3 +1,8 @@
+/* Ensure proper sizing and centering */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 body {
   font-family: sans-serif;
   display: flex;
@@ -24,7 +29,7 @@ body {
   text-align: center;
   border-radius: 1rem;
   width: 90%;
-  margin-bottom: 1rem;
+  margin: 0 auto 1rem;
   cursor: pointer;
 }
 
