@@ -27,23 +27,32 @@ function score(key) {
 }
 function nextCardKey() {
   const keys = flashcards.map(c => c.Tagalog);
+  const last = currentKey;
 
-  // 1. Prioritise cards that were answered wrongly (i.e. learned === false)
+  // 1. Prioritise cards previously answered incorrectly (learned === false)
   const wrong = keys.filter(key => memory[key] && memory[key].learned === false);
   if (wrong.length) {
-    return wrong[Math.floor(Math.random() * wrong.length)];
+    // Avoid showing the exact same card twice in a row when possible
+    const pool = wrong.filter(key => key !== last);
+    const pickFrom = pool.length ? pool : wrong; // if every wrong card equals last, we have to reuse it
+    return pickFrom[Math.floor(Math.random() * pickFrom.length)];
   }
 
-  // 2. Regular scheduling logic for all remaining cards
-  //    (cards with low score – including unseen – come next)
-  const due = keys.filter(key => score(key) < THRESHOLD);
+  // 2. Regular scheduling logic for remaining cards
+  let due = keys.filter(key => score(key) < THRESHOLD);
+
+  // Avoid immediate repetition
+  due = due.filter(key => key !== last);
+
   if (due.length === 0) {
-    // No card is due – just pick any card at random
-    return keys[Math.floor(Math.random() * keys.length)];
+    // No card is due – fall back to any other card except the last, if possible
+    const pool = keys.filter(key => key !== last);
+    if (pool.length) return pool[Math.floor(Math.random() * pool.length)];
+    // Degenerate case: only one card total
+    return last;
   }
 
-  // Among due cards, pick the one whose score is closest to the threshold
-  // (i.e. the highest score while still below THRESHOLD)
+  // Among due cards, pick the one closest to the threshold (highest score below THRESHOLD)
   let best = due[0], bestScore = score(best);
   due.forEach(key => {
     const s = score(key);
@@ -53,7 +62,6 @@ function nextCardKey() {
     }
   });
 
-  // If several cards share that bestScore, pick randomly among them
   const candidates = due.filter(key => Math.abs(score(key) - bestScore) < 1e-9);
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
