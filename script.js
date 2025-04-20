@@ -154,20 +154,26 @@ function showScore() {
   renderScore();
 }
 function renderScore() {
-  // Compute overall score as average across all cards, including unshown ones
-  const allKeys = flashcards.map(c => c.Tagalog);
+  // Only consider cards that have been shown at least once (i.e. present in memory)
+  const shownKeys = Object.keys(memory);
+
+  // Compute overall score as average across shown cards
   let overall = 0;
-  if (allKeys.length) {
-    const scores = allKeys.map(key => score(key) * 100);
-    overall = Math.round(scores.reduce((a, b) => a + b, 0) / allKeys.length);
+  if (shownKeys.length) {
+    const scores = shownKeys.map(key => score(key) * 100);
+    overall = Math.round(scores.reduce((a, b) => a + b, 0) / shownKeys.length);
   }
   document.getElementById('overall-score').textContent = `Overall: ${overall}%`;
 
-  // List scores for all flashcards (reuse allKeys from above)
+  // Sort keys by decreasing score
+  const sortedKeys = shownKeys.sort((a, b) => score(b) - score(a));
+
+  // Render list
   const ul = document.getElementById('word-scores-list');
   ul.innerHTML = '';
-  allKeys.forEach(key => {
+  sortedKeys.forEach(key => {
     const card = flashcardsByKey[key];
+    if (!card) return; // Safety: skip if card not found
     const pct = Math.round(score(key) * 100);
     const li = document.createElement('li');
     li.textContent = `${card.Tagalog} – ${card.English}: ${pct}%`;
