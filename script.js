@@ -14,7 +14,9 @@ const GDRIVE_FILE_ID_KEY = 'gdrive-file-id';      // Persisted Drive file id for
 const SYNC_INTERVAL_KEY = 'gdrive-sync-interval'; // in minutes
 
 let gapiInited = false;
-let googleAuthInstance = null;
+let tokenClient = null; // GIS token client
+let accessToken = null; // Current token
+let authorized = false; // signed in flag
 let syncTimerId = null;
 
 // Replace with your own OAuth 2.0 client ID (type "Web application") from Google Cloud Console.
@@ -45,47 +47,57 @@ function setSyncInterval(minutes) {
 // Initialize Google API when library loaded
 function gapiLoaded() {
   if (!googleClientAvailable()) return; // Drive sync disabled
-  gapi.load('client:auth2', initGoogleClient);
+
+  gapi.load('client', () => {
+    gapi.client.load('drive', 'v3').then(() => {
+      gapiInited = true;
+      updateGDriveUI();
+      // Attempt silent token fetch if user previously granted and script available
+      if (google && google.accounts && google.accounts.oauth2) {
+        initTokenClient();
+        // attempt silent; will fail if not previously granted
+        tokenClient.requestAccessToken({ prompt: '' });
+      }
+    }).catch(err => {
+      console.error('GAPI client load error', err);
+    });
+  });
 }
 
-window.gapiLoaded = gapiLoaded; // Expose for callback if needed
+window.gapiLoaded = gapiLoaded;
 
-function initGoogleClient() {
-  gapi.client.init({
-    clientId: GOOGLE_CLIENT_ID,
-    discoveryDocs: DISCOVERY_DOCS,
-    scope: SCOPES
-  }).then(() => {
-    gapiInited = true;
-    googleAuthInstance = gapi.auth2.getAuthInstance();
-    updateGDriveUI();
-
-    // Attempt silent sign‑in if previously authorised
-    if (googleAuthInstance.isSignedIn.get()) {
+function initTokenClient() {
+  if (tokenClient || !googleClientAvailable()) return;
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: SCOPES,
+    callback: (tokenResponse) => {
+      if (tokenResponse.error) {
+        console.error('Token error', tokenResponse);
+        return;
+      }
+      accessToken = tokenResponse.access_token;
+      gapi.client.setToken({ access_token: accessToken });
+      authorized = true;
       onGoogleSignedIn();
-    } else {
-      // Listen for sign‑in state changes
-      googleAuthInstance.isSignedIn.listen(isSignedIn => {
-        if (isSignedIn) {
-          onGoogleSignedIn();
-        } else {
-          onGoogleSignedOut();
-        }
-      });
     }
-  }).catch(err => {
-    console.error('GAPI init error', err);
   });
 }
 
 function signInWithGoogle() {
   if (!gapiInited) return;
-  googleAuthInstance.signIn();
+  if (!tokenClient) initTokenClient();
+  tokenClient.requestAccessToken({ prompt: 'consent' });
 }
 
 function signOutGoogle() {
-  if (!gapiInited) return;
-  googleAuthInstance.signOut();
+  if (!authorized) return;
+  google.accounts.oauth2.revoke(accessToken, () => {
+    accessToken = null;
+    gapi.client.setToken('');
+    authorized = false;
+    onGoogleSignedOut();
+  });
 }
 
 function onGoogleSignedIn() {
@@ -99,7 +111,6 @@ function onGoogleSignedIn() {
 }
 
 function onGoogleSignedOut() {
-  // Clear timer
   if (syncTimerId) {
     clearInterval(syncTimerId);
     syncTimerId = null;
@@ -123,10 +134,8 @@ function updateGDriveUI() {
     return;
   }
 
-  if (gapiInited && googleAuthInstance.isSignedIn.get()) {
-    const user = googleAuthInstance.currentUser.get();
-    const profile = user.getBasicProfile();
-    statusEl.textContent = `Connected as ${profile ? profile.getEmail() : 'user'}`;
+  if (gapiInited && authorized) {
+    statusEl.textContent = 'Connected';
     connectBtn.style.display = 'none';
     disconnectBtn.style.display = 'inline-block';
     syncSection.style.display = 'block';
@@ -189,7 +198,7 @@ async function getOrCreateScoreFile() {
 }
 
 async function pullScoresFromDrive() {
-  if (!gapiInited || !googleAuthInstance.isSignedIn.get()) return;
+  if (!gapiInited || !authorized) return;
   try {
     const fileId = await getOrCreateScoreFile();
     const res = await gapi.client.drive.files.get({ fileId, alt: 'media' });
@@ -208,7 +217,7 @@ async function pullScoresFromDrive() {
 }
 
 async function pushScoresToDrive() {
-  if (!gapiInited || !googleAuthInstance.isSignedIn.get()) return;
+  if (!gapiInited || !authorized) return;
   try {
     const fileId = await getOrCreateScoreFile();
     await gapi.client.request({
@@ -543,10 +552,9 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   // Attempt to init gapi if already loaded
-  if (googleClientAvailable() && window.gapi && window.gapi.load) {
-    window.gapi.load('client:auth2', initGoogleClient);
+  if (googleClientAvailable() && window.gapi) {
+    gapiLoaded();
   } else {
-    // Feature disabled; ensure UI reflects it
     updateGDriveUI();
   }
 });
