@@ -163,11 +163,10 @@ function renderScore() {
   }
   document.getElementById('overall-score').textContent = `Overall: ${overall}%`;
 
-  // List memorized words
-  const memKeys = Object.keys(memory).filter(key => memory[key].learned);
-  const ul = document.getElementById('memorized-list');
+  // List scores for all flashcards (reuse allKeys from above)
+  const ul = document.getElementById('word-scores-list');
   ul.innerHTML = '';
-  memKeys.forEach(key => {
+  allKeys.forEach(key => {
     const card = flashcardsByKey[key];
     const pct = Math.round(score(key) * 100);
     const li = document.createElement('li');
