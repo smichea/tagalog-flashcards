@@ -552,9 +552,19 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   // Attempt to init gapi if already loaded
-  if (googleClientAvailable() && window.gapi) {
-    gapiLoaded();
+  if (googleClientAvailable()) {
+    waitForGapiThenInit();
   } else {
     updateGDriveUI();
   }
 });
+
+
+// Wait for gapi script to load before initialising
+function waitForGapiThenInit() {
+  if (window.gapi && window.gapi.client) {
+    gapiLoaded();
+  } else {
+    setTimeout(waitForGapiThenInit, 200);
+  }
+}
