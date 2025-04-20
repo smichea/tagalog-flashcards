@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="style.css">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icon.png" type="image/png">
   <title>Tagalog Flashcards</title>
 </head>
 <body>
@@ -70,6 +70,47 @@
     </section>
 
     <button id="settingsBackBtn">Back</button>
+  </div>
+
+  <!-- Confidentiality Page -->
+  <div id="confidentiality-container" style="display:none; width: 90%; max-width: 800px; text-align:left;">
+    <h2>Confidentiality & Privacy</h2>
+    <p>
+      This application runs entirely in your browser. We do not operate any
+      server that receives or stores your personal information or learning
+      statistics. All data – including your memorisation progress – is kept in
+      the browser’s <em>localStorage</em> on your device.
+    </p>
+    <p>
+      If you choose to connect your Google account, the app requests
+      permission to create and update <strong>a single file</strong> in your
+      Google Drive (scope: <code>drive.file</code>). This file contains only
+      your learning progress so that you can sync between devices. No other
+      data is accessed, and nothing is sent to any third‑party server operated
+      by us.
+    </p>
+    <p>
+      Disconnecting from Google Drive in the Settings page immediately stops
+      all Drive interaction. You may also delete the created file from Drive
+      at any time.
+    </p>
+    <button id="confidentialityBackBtn">Back</button>
+  </div>
+
+  <!-- Terms of Usage Page -->
+  <div id="terms-container" style="display:none; width: 90%; max-width: 800px; text-align:left;">
+    <h2>Terms of Usage</h2>
+    <ol>
+      <li>This software is provided “as is”, without warranty of any kind.</li>
+      <li>You may use it freely for personal, non‑commercial learning
+          purposes.</li>
+      <li>We are not responsible for loss of data stored in your browser or
+          Google Drive.</li>
+      <li>You are responsible for securing your own Google account if you
+          enable Drive sync.</li>
+      <li>By using the app you agree to these terms.</li>
+    </ol>
+    <button id="termsBackBtn">Back</button>
   </div>
 
   <!-- Google API Loader; will only load if page online -->

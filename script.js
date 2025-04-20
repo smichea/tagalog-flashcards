@@ -454,7 +454,35 @@ function showSettings() {
   document.getElementById('flashcard-container').style.display='none';
   document.getElementById('quiz-container').style.display='none';
   document.getElementById('settings-container').style.display='block';
+  // Hide legal pages if previously shown
+  document.getElementById('confidentiality-container').style.display='none';
+  document.getElementById('terms-container').style.display='none';
   updateGDriveUI();
+}
+
+function hideAllViews() {
+  const ids = [
+    'score-container',
+    'flashcard-container',
+    'quiz-container',
+    'settings-container',
+    'confidentiality-container',
+    'terms-container'
+  ];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+}
+
+function showConfidentiality() {
+  hideAllViews();
+  document.getElementById('confidentiality-container').style.display='block';
+}
+
+function showTerms() {
+  hideAllViews();
+  document.getElementById('terms-container').style.display='block';
 }
 // Reset memorization and stats
 function resetProgress() {
@@ -533,6 +561,12 @@ window.addEventListener('DOMContentLoaded', () => {
   const settingsBackBtn = document.getElementById('settingsBackBtn');
   if (settingsBackBtn) settingsBackBtn.addEventListener('click', switchToFlashcard);
 
+  // Legal pages back buttons
+  const confBackBtn = document.getElementById('confidentialityBackBtn');
+  if (confBackBtn) confBackBtn.addEventListener('click', switchToFlashcard);
+  const termsBackBtn = document.getElementById('termsBackBtn');
+  if (termsBackBtn) termsBackBtn.addEventListener('click', switchToFlashcard);
+
   // Google Drive connect/disconnect buttons
   const gConnectBtn = document.getElementById('gdrive-connect-btn');
   const gDisconnectBtn = document.getElementById('gdrive-disconnect-btn');
@@ -556,6 +590,15 @@ window.addEventListener('DOMContentLoaded', () => {
     waitForGapiThenInit();
   } else {
     updateGDriveUI();
+  }
+
+  // Detect ?page=confidentiality or ?page=terms in URL and show
+  const params = new URLSearchParams(window.location.search);
+  const page = params.get('page');
+  if (page === 'confidentiality') {
+    showConfidentiality();
+  } else if (page === 'terms') {
+    showTerms();
   }
 });
 

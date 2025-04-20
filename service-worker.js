@@ -6,7 +6,7 @@ const URLS_TO_CACHE = [
   '/script.js',
   '/manifest.json',
   '/flashcards.csv',
-  '/icon.svg'
+  '/icon.png'
 ];
 
 self.addEventListener('install', event => {
