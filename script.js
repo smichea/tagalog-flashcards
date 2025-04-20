@@ -154,14 +154,17 @@ function showScore() {
   renderScore();
 }
 function renderScore() {
-  const memKeys = Object.keys(memory).filter(key => memory[key].learned);
+  // Compute overall score as average across all cards, including unshown ones
+  const allKeys = flashcards.map(c => c.Tagalog);
   let overall = 0;
-  if (memKeys.length) {
-    const scores = memKeys.map(key => score(key) * 100);
-    overall = Math.round(scores.reduce((a,b) => a+b, 0) / memKeys.length);
+  if (allKeys.length) {
+    const scores = allKeys.map(key => score(key) * 100);
+    overall = Math.round(scores.reduce((a, b) => a + b, 0) / allKeys.length);
   }
   document.getElementById('overall-score').textContent = `Overall: ${overall}%`;
 
+  // List memorized words
+  const memKeys = Object.keys(memory).filter(key => memory[key].learned);
   const ul = document.getElementById('memorized-list');
   ul.innerHTML = '';
   memKeys.forEach(key => {
