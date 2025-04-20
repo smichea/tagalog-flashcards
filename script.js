@@ -130,6 +130,10 @@ function memorizeCurrent() {
 function showQuiz() {
   if (!flashcards.length) return;
   const qKey = nextCardKey();
+
+  // Update global state so scheduling knows this card was just shown
+  currentKey = qKey;
+  history.push(qKey);
   const card = flashcardsByKey[qKey];
   const options = [card.English];
   while (options.length < 4) {
