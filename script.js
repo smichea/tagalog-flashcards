@@ -17,8 +17,13 @@ let gapiInited = false;
 let googleAuthInstance = null;
 let syncTimerId = null;
 
-// Replace with your client ID (for production deployments)
-const GOOGLE_CLIENT_ID = 'REPLACE_WITH_YOUR_CLIENT_ID.apps.googleusercontent.com';
+// Replace with your own OAuth 2.0 client ID (type "Web application") from Google Cloud Console.
+// Leave the placeholder as‑is if you don’t want Google‑Drive sync – the code will
+// gracefully disable the feature in that case.
+const GOOGLE_CLIENT_ID = '169626863200-6qe573iddb1ejv4nb23ql8op7c9kimh2.apps.googleusercontent.com';
+function googleClientAvailable() {
+  return GOOGLE_CLIENT_ID && !GOOGLE_CLIENT_ID.startsWith('REPLACE_WITH_');
+}
 const DISCOVERY_DOCS = [
   'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'
 ];
@@ -39,6 +44,7 @@ function setSyncInterval(minutes) {
 
 // Initialize Google API when library loaded
 function gapiLoaded() {
+  if (!googleClientAvailable()) return; // Drive sync disabled
   gapi.load('client:auth2', initGoogleClient);
 }
 
@@ -108,6 +114,14 @@ function updateGDriveUI() {
   const syncSection = document.getElementById('sync-settings');
 
   if (!statusEl) return; // Not loaded yet
+
+  if (!googleClientAvailable()) {
+    statusEl.textContent = 'Google‑Drive sync disabled (missing client ID)';
+    connectBtn.style.display = 'none';
+    disconnectBtn.style.display = 'none';
+    syncSection.style.display = 'none';
+    return;
+  }
 
   if (gapiInited && googleAuthInstance.isSignedIn.get()) {
     const user = googleAuthInstance.currentUser.get();
@@ -529,7 +543,10 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   // Attempt to init gapi if already loaded
-  if (window.gapi && window.gapi.load) {
+  if (googleClientAvailable() && window.gapi && window.gapi.load) {
     window.gapi.load('client:auth2', initGoogleClient);
+  } else {
+    // Feature disabled; ensure UI reflects it
+    updateGDriveUI();
   }
 });
