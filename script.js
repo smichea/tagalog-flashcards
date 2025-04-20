@@ -2,51 +2,47 @@ let flashcards = [];
 let currentKey = null;
 let flashcardsByKey = {};
 let showingEnglish = false;
-let learningSet = [];
-const memorizedKey = 'memorized';
-const statsKey     = 'stats';
-let stats = {};
 let history = [];
 let historyPos = -1;
 let quizMode = false;
-
-// LocalStorage helpers
-function loadMemorized() {
-  return JSON.parse(localStorage.getItem(memorizedKey) || '[]');
+// Scheduling memory: learned flag and last shown date
+const memoryKey     = 'memory';
+const ALPHA         = 0.01;  // decay rate per hour
+const THRESHOLD     = 0.1;   // scheduling threshold
+let memory          = {};
+let skipRecordWrong = false;
+function loadMemory() {
+  memory = JSON.parse(localStorage.getItem(memoryKey) || '{}');
 }
-function saveMemorized(list) {
-  localStorage.setItem(memorizedKey, JSON.stringify(list));
-}
-function loadStats() {
-  return JSON.parse(localStorage.getItem(statsKey) || '{}');
-}
-function saveStats() {
-  localStorage.setItem(statsKey, JSON.stringify(stats));
+function saveMemory() {
+  localStorage.setItem(memoryKey, JSON.stringify(memory));
 }
 
-// Compute which cards remain
-function computeLearningSet() {
-  const memorized = new Set(loadMemorized());
-  learningSet = flashcards
-    .map(c => c.Tagalog)
-    .filter(key => !memorized.has(key));
+// Scheduling helpers
+function score(key) {
+  const memEntry = memory[key];
+  if (!memEntry || !memEntry.learned) return 0;
+  const t = (Date.now() - memEntry.date) / 3600000; // hours since last shown
+  return Math.exp(-ALPHA * t);
 }
-
-// Compute score for a card (0..1)
-function cardScore(key) {
-  const s = stats[key] || {correct:0, total:0};
-  return s.total ? (s.correct / s.total) : 0;
-}
-
-// Pick next card: choose among lowest-score cards (random tie-breaker)
 function nextCardKey() {
-  if (!learningSet.length) return null;
-  let lowest = Infinity;
-  learningSet.forEach(key => {
-    const score = cardScore(key);
-    if (score < lowest) lowest = score;
+  const keys = flashcards.map(c => c.Tagalog);
+  // cards due for review
+  let due = keys.filter(key => score(key) < THRESHOLD);
+  if (due.length === 0) {
+    // no cards below threshold, pick random
+    return keys[Math.floor(Math.random() * keys.length)];
+  }
+  // pick highest score among due
+  let best = due[0], bestScore = score(best);
+  due.forEach(key => {
+    const s = score(key);
+    if (s > bestScore) {
+      best = key;
+      bestScore = s;
+    }
   });
-  const candidates = learningSet.filter(key => cardScore(key) === lowest);
+  const candidates = due.filter(key => Math.abs(score(key) - bestScore) < 1e-9);
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
@@ -67,22 +63,25 @@ function showOverlay(symbol, color, callback) {
 function updateCard() {
   const wordEl = document.getElementById("word");
   const progressEl = document.getElementById("progress");
-  if (!learningSet.length) {
-    wordEl.textContent = "🎉 All memorized!";
-    progressEl.textContent = "";
-    return;
-  }
   const card = flashcardsByKey[currentKey];
+  if (!card) return;
   wordEl.textContent = showingEnglish ? card.English : card.Tagalog;
-  progressEl.textContent = `${learningSet.indexOf(currentKey)+1} / ${learningSet.length}`;
+  // Show number of due cards
+  const keys = flashcards.map(c => c.Tagalog);
+  const dueCount = keys.filter(k => score(k) < THRESHOLD).length;
+  progressEl.textContent = `${dueCount} due / ${keys.length}`;
 }
 function toggleCard() {
-  if (!learningSet.length) return;
   showingEnglish = !showingEnglish;
   updateCard();
 }
 function nextFlashcard() {
-  if (!learningSet.length) return;
+  // Record as not memorized when navigating away
+  if (currentKey !== null && !skipRecordWrong) {
+    memory[currentKey] = {learned: false, date: Date.now()};
+    saveMemory();
+  }
+  skipRecordWrong = false;
   currentKey = nextCardKey();
   showingEnglish = false;
   history.push(currentKey);
@@ -90,6 +89,11 @@ function nextFlashcard() {
   updateCard();
 }
 function prevFlashcard() {
+  // Record as not memorized when navigating away
+  if (currentKey !== null) {
+    memory[currentKey] = {learned: false, date: Date.now()};
+    saveMemory();
+  }
   if (historyPos > 0) {
     historyPos--;
     currentKey = history[historyPos];
@@ -98,22 +102,18 @@ function prevFlashcard() {
   }
 }
 function memorizeCurrent() {
-  const mem = loadMemorized();
-  if (!mem.includes(currentKey)) {
-    mem.push(currentKey);
-    saveMemorized(mem);
-  }
-  computeLearningSet();
+  // Mark as memorized
+  memory[currentKey] = {learned: true, date: Date.now()};
+  saveMemory();
+  // Skip recording as not memorized on next navigation
+  skipRecordWrong = true;
   nextFlashcard();
 }
 
 // Quiz Mode
 function showQuiz() {
-  if (!learningSet.length) {
-    document.getElementById("quiz-word").textContent = "🎉 All memorized!";
-    return;
-  }
-  const qKey = learningSet[Math.floor(Math.random() * learningSet.length)];
+  if (!flashcards.length) return;
+  const qKey = nextCardKey();
   const card = flashcardsByKey[qKey];
   const options = [card.English];
   while (options.length < 4) {
@@ -134,15 +134,16 @@ function showQuiz() {
 }
 function handleAnswer(qKey, chosen) {
   const correct = flashcardsByKey[qKey].English;
-  stats[qKey] = stats[qKey] || {correct:0, total:0};
-  stats[qKey].total++;
   if (chosen === correct) {
-    stats[qKey].correct++;
+    // Mark as memorized on correct answer
+    memory[qKey] = {learned: true, date: Date.now()};
     showOverlay('✔', 'lightgreen', showQuiz);
   } else {
+    // Mark as not memorized on incorrect answer
+    memory[qKey] = {learned: false, date: Date.now()};
     showOverlay('✖', 'tomato', showQuiz);
   }
-  saveStats();
+  saveMemory();
 }
 
 // Score View
@@ -153,26 +154,21 @@ function showScore() {
   renderScore();
 }
 function renderScore() {
-  const memKeys = loadMemorized();
+  const memKeys = Object.keys(memory).filter(key => memory[key].learned);
   let overall = 0;
   if (memKeys.length) {
-    const scores = memKeys.map(key => {
-      const s = stats[key] || {correct:0, total:0};
-      return s.total ? (s.correct / s.total) : 0;
-    });
-    overall = Math.round((scores.reduce((a,b) => a+b, 0) / memKeys.length) * 100);
+    const scores = memKeys.map(key => score(key) * 100);
+    overall = Math.round(scores.reduce((a,b) => a+b, 0) / memKeys.length);
   }
-  document.getElementById('overall-score').textContent =
-    `Overall: ${overall}%`;
+  document.getElementById('overall-score').textContent = `Overall: ${overall}%`;
 
   const ul = document.getElementById('memorized-list');
   ul.innerHTML = '';
   memKeys.forEach(key => {
     const card = flashcardsByKey[key];
-    const s = stats[key] || {correct:0, total:0};
-    const pct = s.total ? Math.round((s.correct/s.total)*100) : 0;
+    const pct = Math.round(score(key) * 100);
     const li = document.createElement('li');
-    li.textContent = `${card.Tagalog} – ${card.English}: ${pct}% (${s.correct}/${s.total})`;
+    li.textContent = `${card.Tagalog} – ${card.English}: ${pct}%`;
     ul.appendChild(li);
   });
 }
@@ -194,12 +190,12 @@ function switchToQuiz() {
 // Reset memorization and stats
 function resetProgress() {
   if (!confirm('This will clear all your progress. Continue?')) return;
-  localStorage.removeItem(memorizedKey);
-  localStorage.removeItem(statsKey);
-  stats = {};
-  computeLearningSet();
+  // Clear memory
+  localStorage.removeItem(memoryKey);
+  memory = {};
   history = [];
   historyPos = -1;
+  skipRecordWrong = false;
   switchToFlashcard();
   nextFlashcard();
 }
@@ -229,8 +225,12 @@ fetch('./flashcards.csv')
     flashcards.forEach(c => {
       flashcardsByKey[c.Tagalog] = c;
     });
-    stats = loadStats();
-    computeLearningSet();
+    // Load memory and initialize
+    loadMemory();
+    history = [];
+    historyPos = -1;
+    skipRecordWrong = false;
+    switchToFlashcard();
     nextFlashcard();
   })
   .catch(err => {

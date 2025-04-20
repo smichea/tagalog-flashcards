@@ -1,6 +1,6 @@
 {
     "model": "o4-mini-high",
     "approvalMode": "suggest",
-    "fullAutoErrorMode": "ask-user",
+    "fullAutoErrorMode": "full-auto",
     "notify": true
   }
