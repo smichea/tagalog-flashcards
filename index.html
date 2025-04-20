@@ -14,6 +14,7 @@
     <button id="flashcardModeBtn">Flashcards</button>
     <button id="quizModeBtn">Quiz</button>
     <button id="scoreModeBtn">Score</button>
+    <button id="settingsModeBtn">Settings</button>
   </div>
 
   <!-- Flashcard View -->
@@ -48,6 +49,31 @@
     <button id="backBtn">Back</button>
     <button id="resetBtn">Reset Progress</button>
   </div>
+
+  <!-- Settings View -->
+  <div id="settings-container" style="display:none; width: 90%; max-width: 600px;">
+    <h2>Settings</h2>
+
+    <section id="gdrive-section">
+      <h3>Google Drive Sync</h3>
+      <p id="gdrive-status">Not connected</p>
+      <button id="gdrive-connect-btn">Connect to Google</button>
+      <button id="gdrive-disconnect-btn" style="display:none;">Disconnect</button>
+    </section>
+
+    <section id="sync-settings" style="display:none;">
+      <label>
+        Sync interval (minutes):
+        <input type="number" id="sync-interval-input" min="1" value="10" style="width:4em;">
+      </label>
+      <p id="last-sync-info">Last sync: –</p>
+    </section>
+
+    <button id="settingsBackBtn">Back</button>
+  </div>
+
+  <!-- Google API Loader; will only load if page online -->
+  <script async defer src="https://apis.google.com/js/api.js"></script>
 
   <script src="script.js"></script>
 </body>

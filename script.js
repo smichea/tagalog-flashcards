@@ -5,6 +5,211 @@ let showingEnglish = false;
 let history = [];
 let historyPos = -1;
 let quizMode = false;
+
+// -----------------------------
+// Google Drive Sync Settings
+// -----------------------------
+const GDRIVE_TOKEN_KEY = 'gdrive-token-info';     // Persisted Google auth data
+const GDRIVE_FILE_ID_KEY = 'gdrive-file-id';      // Persisted Drive file id for score
+const SYNC_INTERVAL_KEY = 'gdrive-sync-interval'; // in minutes
+
+let gapiInited = false;
+let googleAuthInstance = null;
+let syncTimerId = null;
+
+// Replace with your client ID (for production deployments)
+const GOOGLE_CLIENT_ID = 'REPLACE_WITH_YOUR_CLIENT_ID.apps.googleusercontent.com';
+const DISCOVERY_DOCS = [
+  'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'
+];
+const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+
+// Utility: get stored sync interval (minutes)
+function getSyncIntervalMinutes() {
+  const stored = parseInt(localStorage.getItem(SYNC_INTERVAL_KEY), 10);
+  return (!isNaN(stored) && stored > 0) ? stored : 10; // default 10
+}
+
+function setSyncInterval(minutes) {
+  localStorage.setItem(SYNC_INTERVAL_KEY, String(minutes));
+  // Restart timer
+  if (syncTimerId) clearInterval(syncTimerId);
+  syncTimerId = setInterval(pushScoresToDrive, minutes * 60 * 1000);
+}
+
+// Initialize Google API when library loaded
+function gapiLoaded() {
+  gapi.load('client:auth2', initGoogleClient);
+}
+
+window.gapiLoaded = gapiLoaded; // Expose for callback if needed
+
+function initGoogleClient() {
+  gapi.client.init({
+    clientId: GOOGLE_CLIENT_ID,
+    discoveryDocs: DISCOVERY_DOCS,
+    scope: SCOPES
+  }).then(() => {
+    gapiInited = true;
+    googleAuthInstance = gapi.auth2.getAuthInstance();
+    updateGDriveUI();
+
+    // Attempt silent sign‑in if previously authorised
+    if (googleAuthInstance.isSignedIn.get()) {
+      onGoogleSignedIn();
+    } else {
+      // Listen for sign‑in state changes
+      googleAuthInstance.isSignedIn.listen(isSignedIn => {
+        if (isSignedIn) {
+          onGoogleSignedIn();
+        } else {
+          onGoogleSignedOut();
+        }
+      });
+    }
+  }).catch(err => {
+    console.error('GAPI init error', err);
+  });
+}
+
+function signInWithGoogle() {
+  if (!gapiInited) return;
+  googleAuthInstance.signIn();
+}
+
+function signOutGoogle() {
+  if (!gapiInited) return;
+  googleAuthInstance.signOut();
+}
+
+function onGoogleSignedIn() {
+  updateGDriveUI();
+  // Set timer for periodic sync
+  setSyncInterval(getSyncIntervalMinutes());
+  // Immediately pull remote scores (then push local as fallback)
+  pullScoresFromDrive().then(() => {
+    pushScoresToDrive();
+  });
+}
+
+function onGoogleSignedOut() {
+  // Clear timer
+  if (syncTimerId) {
+    clearInterval(syncTimerId);
+    syncTimerId = null;
+  }
+  updateGDriveUI();
+}
+
+function updateGDriveUI() {
+  const statusEl = document.getElementById('gdrive-status');
+  const connectBtn = document.getElementById('gdrive-connect-btn');
+  const disconnectBtn = document.getElementById('gdrive-disconnect-btn');
+  const syncSection = document.getElementById('sync-settings');
+
+  if (!statusEl) return; // Not loaded yet
+
+  if (gapiInited && googleAuthInstance.isSignedIn.get()) {
+    const user = googleAuthInstance.currentUser.get();
+    const profile = user.getBasicProfile();
+    statusEl.textContent = `Connected as ${profile ? profile.getEmail() : 'user'}`;
+    connectBtn.style.display = 'none';
+    disconnectBtn.style.display = 'inline-block';
+    syncSection.style.display = 'block';
+  } else {
+    statusEl.textContent = 'Not connected';
+    connectBtn.style.display = 'inline-block';
+    disconnectBtn.style.display = 'none';
+    syncSection.style.display = 'none';
+  }
+}
+
+// -----------------------------
+// Drive helper functions
+// -----------------------------
+
+async function getOrCreateScoreFile() {
+  let fileId = localStorage.getItem(GDRIVE_FILE_ID_KEY);
+  if (fileId) {
+    // Check if file still exists
+    try {
+      await gapi.client.drive.files.get({ fileId });
+      return fileId;
+    } catch (err) {
+      console.warn('Stored file id invalid, will recreate', err);
+      localStorage.removeItem(GDRIVE_FILE_ID_KEY);
+    }
+  }
+
+  // Search for existing file by name in user's Drive (appDataFolder would be better but we use file scope)
+  const res = await gapi.client.drive.files.list({
+    q: "name='flashcard_scores.json' and mimeType='application/json' and trashed=false",
+    spaces: 'drive',
+    fields: 'files(id, name)',
+    pageSize: 1
+  });
+  if (res.result.files && res.result.files.length > 0) {
+    fileId = res.result.files[0].id;
+  } else {
+    // create
+    const fileMetadata = {
+      name: 'flashcard_scores.json',
+      mimeType: 'application/json'
+    };
+    const media = {
+      mimeType: 'application/json',
+      body: JSON.stringify(memory)
+    };
+    const createRes = await gapi.client.request({
+      path: '/upload/drive/v3/files',
+      method: 'POST',
+      params: { uploadType: 'media' },
+      body: media.body,
+      headers: { 'Content-Type': 'application/json' },
+      // Basic metadata can be included using metadata upload; simplified here
+    });
+    fileId = createRes.result.id;
+  }
+  localStorage.setItem(GDRIVE_FILE_ID_KEY, fileId);
+  return fileId;
+}
+
+async function pullScoresFromDrive() {
+  if (!gapiInited || !googleAuthInstance.isSignedIn.get()) return;
+  try {
+    const fileId = await getOrCreateScoreFile();
+    const res = await gapi.client.drive.files.get({ fileId, alt: 'media' });
+    if (res.body) {
+      const remoteMemory = JSON.parse(res.body);
+      if (remoteMemory && typeof remoteMemory === 'object') {
+        memory = remoteMemory;
+        saveMemory();
+        renderScore();
+      }
+    }
+    document.getElementById('last-sync-info').textContent = `Last sync: pulled at ${new Date().toLocaleTimeString()}`;
+  } catch (err) {
+    console.error('Pull scores error', err);
+  }
+}
+
+async function pushScoresToDrive() {
+  if (!gapiInited || !googleAuthInstance.isSignedIn.get()) return;
+  try {
+    const fileId = await getOrCreateScoreFile();
+    await gapi.client.request({
+      path: `/upload/drive/v3/files/${fileId}`,
+      method: 'PATCH',
+      params: { uploadType: 'media' },
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(memory)
+    });
+    document.getElementById('last-sync-info').textContent = `Last sync: pushed at ${new Date().toLocaleTimeString()}`;
+  } catch (err) {
+    console.error('Push scores error', err);
+  }
+}
+
 // Scheduling memory: learned flag and last shown date
 const memoryKey     = 'memory';
 const ALPHA         = 0.0001;  // decay rate per hour
@@ -171,6 +376,7 @@ function showScore() {
   document.getElementById('flashcard-container').style.display='none';
   document.getElementById('quiz-container').style.display='none';
   document.getElementById('score-container').style.display='block';
+  document.getElementById('settings-container').style.display='none';
   renderScore();
 }
 function renderScore() {
@@ -206,15 +412,26 @@ function renderScore() {
 function switchToFlashcard() {
   quizMode = false;
   document.getElementById('score-container').style.display='none';
+  document.getElementById('settings-container').style.display='none';
   document.getElementById('quiz-container').style.display='none';
   document.getElementById('flashcard-container').style.display='block';
 }
 function switchToQuiz() {
   quizMode = true;
   document.getElementById('score-container').style.display='none';
+  document.getElementById('settings-container').style.display='none';
   document.getElementById('flashcard-container').style.display='none';
   document.getElementById('quiz-container').style.display='block';
   showQuiz();
+}
+
+function showSettings() {
+  quizMode = false;
+  document.getElementById('score-container').style.display='none';
+  document.getElementById('flashcard-container').style.display='none';
+  document.getElementById('quiz-container').style.display='none';
+  document.getElementById('settings-container').style.display='block';
+  updateGDriveUI();
 }
 // Reset memorization and stats
 function resetProgress() {
@@ -286,4 +503,33 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('backBtn').addEventListener('click', switchToFlashcard);
   const resetBtn = document.getElementById('resetBtn');
   if (resetBtn) resetBtn.addEventListener('click', resetProgress);
+
+  // Settings view buttons
+  const settingsBtn = document.getElementById('settingsModeBtn');
+  if (settingsBtn) settingsBtn.addEventListener('click', showSettings);
+  const settingsBackBtn = document.getElementById('settingsBackBtn');
+  if (settingsBackBtn) settingsBackBtn.addEventListener('click', switchToFlashcard);
+
+  // Google Drive connect/disconnect buttons
+  const gConnectBtn = document.getElementById('gdrive-connect-btn');
+  const gDisconnectBtn = document.getElementById('gdrive-disconnect-btn');
+  if (gConnectBtn) gConnectBtn.addEventListener('click', signInWithGoogle);
+  if (gDisconnectBtn) gDisconnectBtn.addEventListener('click', signOutGoogle);
+
+  // Sync interval input
+  const intervalInput = document.getElementById('sync-interval-input');
+  if (intervalInput) {
+    intervalInput.value = getSyncIntervalMinutes();
+    intervalInput.addEventListener('change', (e) => {
+      const val = parseInt(e.target.value, 10);
+      if (!isNaN(val) && val > 0) {
+        setSyncInterval(val);
+      }
+    });
+  }
+
+  // Attempt to init gapi if already loaded
+  if (window.gapi && window.gapi.load) {
+    window.gapi.load('client:auth2', initGoogleClient);
+  }
 });
