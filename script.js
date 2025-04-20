@@ -7,7 +7,7 @@ let historyPos = -1;
 let quizMode = false;
 // Scheduling memory: learned flag and last shown date
 const memoryKey     = 'memory';
-const ALPHA         = 0.01;  // decay rate per hour
+const ALPHA         = 0.0001;  // decay rate per hour
 const THRESHOLD     = 0.1;   // scheduling threshold
 let memory          = {};
 // Navigation no longer penalises the user; cards are only marked learned/not‑learned
