@@ -1,5 +1,6 @@
 let flashcards = [];
-let currentIndex = 0;
+let currentKey = null;
+let flashcardsByKey = {};
 let showingEnglish = false;
 let learningSet = [];
 const memorizedKey = 'memorized';
@@ -27,23 +28,26 @@ function saveStats() {
 function computeLearningSet() {
   const memorized = new Set(loadMemorized());
   learningSet = flashcards
-    .map((_, i) => i)
-    .filter(i => !memorized.has(i));
+    .map(c => c.Tagalog)
+    .filter(key => !memorized.has(key));
 }
 
-// Weighted random for practice
-function weightedRandomIndex() {
-  const weights = learningSet.map(i => {
-    const s = stats[i] || {correct:0, total:0};
-    return s.total > 0 ? 1 - (s.correct / s.total) : 1;
+// Compute score for a card (0..1)
+function cardScore(key) {
+  const s = stats[key] || {correct:0, total:0};
+  return s.total ? (s.correct / s.total) : 0;
+}
+
+// Pick next card: choose among lowest-score cards (random tie-breaker)
+function nextCardKey() {
+  if (!learningSet.length) return null;
+  let lowest = Infinity;
+  learningSet.forEach(key => {
+    const score = cardScore(key);
+    if (score < lowest) lowest = score;
   });
-  const sum = weights.reduce((a,b)=>a+b, 0);
-  let r = Math.random() * sum;
-  for (let j = 0; j < learningSet.length; j++) {
-    r -= weights[j];
-    if (r <= 0) return learningSet[j];
-  }
-  return learningSet[learningSet.length-1];
+  const candidates = learningSet.filter(key => cardScore(key) === lowest);
+  return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
 // Show overlay check/cross
@@ -68,9 +72,9 @@ function updateCard() {
     progressEl.textContent = "";
     return;
   }
-  const card = flashcards[currentIndex];
+  const card = flashcardsByKey[currentKey];
   wordEl.textContent = showingEnglish ? card.English : card.Tagalog;
-  progressEl.textContent = `${learningSet.indexOf(currentIndex)+1} / ${learningSet.length}`;
+  progressEl.textContent = `${learningSet.indexOf(currentKey)+1} / ${learningSet.length}`;
 }
 function toggleCard() {
   if (!learningSet.length) return;
@@ -79,24 +83,24 @@ function toggleCard() {
 }
 function nextFlashcard() {
   if (!learningSet.length) return;
-  currentIndex = weightedRandomIndex();
+  currentKey = nextCardKey();
   showingEnglish = false;
-  history.push(currentIndex);
+  history.push(currentKey);
   historyPos = history.length - 1;
   updateCard();
 }
 function prevFlashcard() {
   if (historyPos > 0) {
     historyPos--;
-    currentIndex = history[historyPos];
+    currentKey = history[historyPos];
     showingEnglish = false;
     updateCard();
   }
 }
 function memorizeCurrent() {
   const mem = loadMemorized();
-  if (!mem.includes(currentIndex)) {
-    mem.push(currentIndex);
+  if (!mem.includes(currentKey)) {
+    mem.push(currentKey);
     saveMemorized(mem);
   }
   computeLearningSet();
@@ -109,8 +113,8 @@ function showQuiz() {
     document.getElementById("quiz-word").textContent = "🎉 All memorized!";
     return;
   }
-  const qIndex = learningSet[Math.floor(Math.random() * learningSet.length)];
-  const card = flashcards[qIndex];
+  const qKey = learningSet[Math.floor(Math.random() * learningSet.length)];
+  const card = flashcardsByKey[qKey];
   const options = [card.English];
   while (options.length < 4) {
     const rnd = flashcards[Math.floor(Math.random() * flashcards.length)].English;
@@ -124,16 +128,16 @@ function showQuiz() {
   options.forEach(opt => {
     const btn = document.createElement('button');
     btn.textContent = opt;
-    btn.onclick = () => handleAnswer(qIndex, opt);
+    btn.onclick = () => handleAnswer(qKey, opt);
     optsEl.appendChild(btn);
   });
 }
-function handleAnswer(qIndex, chosen) {
-  const correct = flashcards[qIndex].English;
-  stats[qIndex] = stats[qIndex] || {correct:0, total:0};
-  stats[qIndex].total++;
+function handleAnswer(qKey, chosen) {
+  const correct = flashcardsByKey[qKey].English;
+  stats[qKey] = stats[qKey] || {correct:0, total:0};
+  stats[qKey].total++;
   if (chosen === correct) {
-    stats[qIndex].correct++;
+    stats[qKey].correct++;
     showOverlay('✔', 'lightgreen', showQuiz);
   } else {
     showOverlay('✖', 'tomato', showQuiz);
@@ -149,24 +153,23 @@ function showScore() {
   renderScore();
 }
 function renderScore() {
-  const memIndices = loadMemorized();
-  let totalCorrect = 0, totalAttempts = 0;
-  memIndices.forEach(i => {
-    const s = stats[i] || {correct:0, total:0};
-    totalCorrect += s.correct;
-    totalAttempts += s.total;
-  });
-  const overall = totalAttempts
-    ? Math.round((totalCorrect/totalAttempts)*100)
-    : 0;
+  const memKeys = loadMemorized();
+  let overall = 0;
+  if (memKeys.length) {
+    const scores = memKeys.map(key => {
+      const s = stats[key] || {correct:0, total:0};
+      return s.total ? (s.correct / s.total) : 0;
+    });
+    overall = Math.round((scores.reduce((a,b) => a+b, 0) / memKeys.length) * 100);
+  }
   document.getElementById('overall-score').textContent =
-    `Overall: ${overall}% (${totalCorrect}/${totalAttempts})`;
+    `Overall: ${overall}%`;
 
   const ul = document.getElementById('memorized-list');
   ul.innerHTML = '';
-  memIndices.forEach(i => {
-    const card = flashcards[i];
-    const s = stats[i] || {correct:0, total:0};
+  memKeys.forEach(key => {
+    const card = flashcardsByKey[key];
+    const s = stats[key] || {correct:0, total:0};
     const pct = s.total ? Math.round((s.correct/s.total)*100) : 0;
     const li = document.createElement('li');
     li.textContent = `${card.Tagalog} – ${card.English}: ${pct}% (${s.correct}/${s.total})`;
@@ -221,6 +224,11 @@ fetch('./flashcards.csv')
   .then(r => r.text())
   .then(txt => {
     flashcards = parseCSV(txt);
+    // build lookup by tagalog key
+    flashcardsByKey = {};
+    flashcards.forEach(c => {
+      flashcardsByKey[c.Tagalog] = c;
+    });
     stats = loadStats();
     computeLearningSet();
     nextFlashcard();
