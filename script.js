@@ -27,13 +27,23 @@ function score(key) {
 }
 function nextCardKey() {
   const keys = flashcards.map(c => c.Tagalog);
-  // cards due for review
-  let due = keys.filter(key => score(key) < THRESHOLD);
+
+  // 1. Prioritise cards that were answered wrongly (i.e. learned === false)
+  const wrong = keys.filter(key => memory[key] && memory[key].learned === false);
+  if (wrong.length) {
+    return wrong[Math.floor(Math.random() * wrong.length)];
+  }
+
+  // 2. Regular scheduling logic for all remaining cards
+  //    (cards with low score – including unseen – come next)
+  const due = keys.filter(key => score(key) < THRESHOLD);
   if (due.length === 0) {
-    // no cards below threshold, pick random
+    // No card is due – just pick any card at random
     return keys[Math.floor(Math.random() * keys.length)];
   }
-  // pick highest score among due
+
+  // Among due cards, pick the one whose score is closest to the threshold
+  // (i.e. the highest score while still below THRESHOLD)
   let best = due[0], bestScore = score(best);
   due.forEach(key => {
     const s = score(key);
@@ -42,6 +52,8 @@ function nextCardKey() {
       bestScore = s;
     }
   });
+
+  // If several cards share that bestScore, pick randomly among them
   const candidates = due.filter(key => Math.abs(score(key) - bestScore) < 1e-9);
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
@@ -154,18 +166,19 @@ function showScore() {
   renderScore();
 }
 function renderScore() {
-  // Only consider cards that have been shown at least once (i.e. present in memory)
+  // Keys that have been shown at least once (i.e. those in memory)
   const shownKeys = Object.keys(memory);
 
-  // Compute overall score as average across shown cards
+  // Compute overall score across ALL cards, including unseen ones
+  const allKeys = flashcards.map(c => c.Tagalog);
   let overall = 0;
-  if (shownKeys.length) {
-    const scores = shownKeys.map(key => score(key) * 100);
-    overall = Math.round(scores.reduce((a, b) => a + b, 0) / shownKeys.length);
+  if (allKeys.length) {
+    const scoresAll = allKeys.map(key => score(key) * 100);
+    overall = Math.round(scoresAll.reduce((a, b) => a + b, 0) / allKeys.length);
   }
   document.getElementById('overall-score').textContent = `Overall: ${overall}%`;
 
-  // Sort keys by decreasing score
+  // Sort shown cards by decreasing score for detailed list
   const sortedKeys = shownKeys.sort((a, b) => score(b) - score(a));
 
   // Render list
