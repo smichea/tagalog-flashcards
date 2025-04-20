@@ -10,7 +10,8 @@ const memoryKey     = 'memory';
 const ALPHA         = 0.01;  // decay rate per hour
 const THRESHOLD     = 0.1;   // scheduling threshold
 let memory          = {};
-let skipRecordWrong = false;
+// Navigation no longer penalises the user; cards are only marked learned/not‑learned
+// through explicit actions (memorize button or quiz answers).
 function loadMemory() {
   memory = JSON.parse(localStorage.getItem(memoryKey) || '{}');
 }
@@ -28,25 +29,31 @@ function score(key) {
 function nextCardKey() {
   const keys = flashcards.map(c => c.Tagalog);
   const last = currentKey;
+  // Recent cards to avoid repetition (e.g., last 2 shown)
+  const RECENT_LIMIT = 2;
+  const recentSet = new Set(history.slice(-RECENT_LIMIT));
 
   // 1. Prioritise cards previously answered incorrectly (learned === false)
   const wrong = keys.filter(key => memory[key] && memory[key].learned === false);
   if (wrong.length) {
-    // Avoid showing the exact same card twice in a row when possible
-    const pool = wrong.filter(key => key !== last);
-    const pickFrom = pool.length ? pool : wrong; // if every wrong card equals last, we have to reuse it
-    return pickFrom[Math.floor(Math.random() * pickFrom.length)];
+    // Avoid showing very recent cards again
+    const pool = wrong.filter(key => key !== last && !recentSet.has(key));
+    if (pool.length) {
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+    // If all wrong cards were shown very recently, delay them and fall through
+    // to the regular scheduling so that another (non‑wrong) card can appear.
   }
 
   // 2. Regular scheduling logic for remaining cards
   let due = keys.filter(key => score(key) < THRESHOLD);
 
-  // Avoid immediate repetition
-  due = due.filter(key => key !== last);
+  // Avoid very recent cards
+  due = due.filter(key => !recentSet.has(key));
 
   if (due.length === 0) {
     // No card is due – fall back to any other card except the last, if possible
-    const pool = keys.filter(key => key !== last);
+    const pool = keys.filter(key => !recentSet.has(key) && key !== last);
     if (pool.length) return pool[Math.floor(Math.random() * pool.length)];
     // Degenerate case: only one card total
     return last;
@@ -96,12 +103,7 @@ function toggleCard() {
   updateCard();
 }
 function nextFlashcard() {
-  // Record as not memorized when navigating away
-  if (currentKey !== null && !skipRecordWrong) {
-    memory[currentKey] = {learned: false, date: Date.now()};
-    saveMemory();
-  }
-  skipRecordWrong = false;
+  // Simply move to next card; navigation itself does not affect memory stats.
   currentKey = nextCardKey();
   showingEnglish = false;
   history.push(currentKey);
@@ -109,11 +111,7 @@ function nextFlashcard() {
   updateCard();
 }
 function prevFlashcard() {
-  // Record as not memorized when navigating away
-  if (currentKey !== null) {
-    memory[currentKey] = {learned: false, date: Date.now()};
-    saveMemory();
-  }
+  // Navigation should not affect memory stats.
   if (historyPos > 0) {
     historyPos--;
     currentKey = history[historyPos];
@@ -125,8 +123,6 @@ function memorizeCurrent() {
   // Mark as memorized
   memory[currentKey] = {learned: true, date: Date.now()};
   saveMemory();
-  // Skip recording as not memorized on next navigation
-  skipRecordWrong = true;
   nextFlashcard();
 }
 
@@ -224,7 +220,6 @@ function resetProgress() {
   memory = {};
   history = [];
   historyPos = -1;
-  skipRecordWrong = false;
   switchToFlashcard();
   nextFlashcard();
 }
@@ -258,7 +253,7 @@ fetch('./flashcards.csv')
     loadMemory();
     history = [];
     historyPos = -1;
-    skipRecordWrong = false;
+    // No automatic wrong-recording; ensure state clean
     switchToFlashcard();
     nextFlashcard();
   })
