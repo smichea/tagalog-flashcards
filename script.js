@@ -188,23 +188,50 @@ function switchToQuiz() {
   document.getElementById('quiz-container').style.display='block';
   showQuiz();
 }
+// Reset memorization and stats
+function resetProgress() {
+  if (!confirm('This will clear all your progress. Continue?')) return;
+  localStorage.removeItem(memorizedKey);
+  localStorage.removeItem(statsKey);
+  stats = {};
+  computeLearningSet();
+  history = [];
+  historyPos = -1;
+  switchToFlashcard();
+  nextFlashcard();
+}
 
 // CSV Load & Init
 function parseCSV(text) {
-  return text.trim().split('\n').slice(1).map(line=>{
-    const [t,e] = line.split(',').map(v=>v.trim());
-    return {Tagalog:t,English:e};
-  });
+  const lines = text.trim().split(/\r?\n/);
+  const data = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    const match = line.match(/^(?:"([^"]*)"|([^,]*)),(?:"([^"]*)"|([^,]*))$/);
+    if (match) {
+      data.push({
+        Tagalog: (match[1] || match[2] || '').trim(),
+        English: (match[3] || match[4] || '').trim()
+      });
+    }
+  }
+  return data;
 }
 fetch('./flashcards.csv')
-  .then(r=>r.text())
-  .then(txt=>{
+  .then(r => r.text())
+  .then(txt => {
     flashcards = parseCSV(txt);
-    stats      = loadStats();
+    stats = loadStats();
     computeLearningSet();
     nextFlashcard();
   })
-  .catch(err=>console.error("Load CSV error:",err));
+  .catch(err => {
+    console.error("Load CSV error:", err);
+    const wordEl = document.getElementById('word');
+    if (wordEl) wordEl.textContent = '⚠️ Error loading flashcards.';
+    const controls = document.querySelector('.controls');
+    if (controls) controls.style.display = 'none';
+  });
 
 // Register SW
 if ('serviceWorker' in navigator) {
@@ -221,4 +248,6 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('quizModeBtn').addEventListener('click', switchToQuiz);
   document.getElementById('scoreModeBtn').addEventListener('click', showScore);
   document.getElementById('backBtn').addEventListener('click', switchToFlashcard);
+  const resetBtn = document.getElementById('resetBtn');
+  if (resetBtn) resetBtn.addEventListener('click', resetProgress);
 });
